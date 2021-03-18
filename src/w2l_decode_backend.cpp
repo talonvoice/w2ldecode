@@ -325,7 +325,7 @@ public:
             tok = tokens[i];
             if (tok >= 0 && tok != blankIdx) {
                 std::string s = tokenDict.getEntry(tok);
-                if (!s.empty() && s[0] == '_') {
+                if (!s.empty() && (s[0] == '_' || s[0] == '|')) {
                     if (ostr.tellp() > 0) {
                         ostr << " ";
                     }
