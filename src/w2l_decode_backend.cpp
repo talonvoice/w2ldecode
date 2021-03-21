@@ -318,7 +318,7 @@ public:
     std::string tokensToStringDedup(const std::vector<int> &tokens, int from, int to) {
         std::ostringstream ostr;
         int tok = -1;
-        bool lastBlank = false;
+        bool lastSil = false;
         for (int i = from; i < to; ++i) {
             if (tok == tokens[i])
                 continue;
@@ -326,14 +326,17 @@ public:
             if (tok >= 0 && tok != blankIdx) {
                 std::string s = tokenDict.getEntry(tok);
                 if (!s.empty() && (s[0] == '_' || s[0] == '|')) {
-                    if (ostr.tellp() > 0) {
+                    if (ostr.tellp() > 0 && !lastSil) {
                         ostr << " ";
+                        lastSil = true;
                     }
                     s = s.substr(1);
                 }
-                ostr << s;
+                if (!s.empty()) {
+                    lastSil = s.back() == ' ';
+                    ostr << s;
+                }
             }
-            lastBlank = (tok == blankIdx);
         }
         return ostr.str();
     };
