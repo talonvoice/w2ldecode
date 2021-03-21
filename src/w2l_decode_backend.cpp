@@ -556,7 +556,8 @@ struct ViterbiDifferenceRejecter {
         }
 
         // Only allow a full silence window if the viterbi tok in the middle is also silence
-        if (allSilence && viterbiToks[frame - windowMaxSize/2] != 0) {
+        int middleTok = viterbiToks[frame - windowMaxSize/2];
+        if (allSilence && middleTok != silIdx && middleTok != blankIdx) {
             return -100000;
         }
 
