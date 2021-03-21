@@ -516,6 +516,7 @@ struct ViterbiDifferenceRejecter {
 
     int windowMaxSize;
     int silIdx;
+    int blankIdx;
     float threshold;
     w2l_emission *emission;
     float *transitions;
@@ -525,14 +526,14 @@ struct ViterbiDifferenceRejecter {
         const int N = emission->n_tokens;
         auto refScore = viterbiWindowScores[frame];
 
-        bool allSilence = token == silIdx;
+        bool allSilence = (token == silIdx || token == blankIdx);
         int prevToken = token;
         auto thisState = &prevState;
         float thisScore = emission->matrix[frame * N + token];
         int thisWindow = 1;
         while (thisWindow < windowMaxSize && thisState && frame - thisWindow >= 0) {
             token = thisState->getToken();
-            if (token != 0)
+            if (token != silIdx && token != blankIdx)
                 allSilence = false;
             thisScore += emission->matrix[(frame - thisWindow) * N + token];
             if (transitions) {
@@ -627,6 +628,7 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
     rejecter.threshold = opts.rejection_threshold;
     rejecter.emission = emission;
     rejecter.silIdx = silIdx;
+    rejecter.blankIdx = blankIdx;
     if (transitions.size() == 0) {
         rejecter.transitions = NULL;
     } else {

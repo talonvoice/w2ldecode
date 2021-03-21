@@ -98,7 +98,8 @@ struct SimpleDecoderState {
   LMStateType lmState;
   const SimpleDecoderState* parent; // Parent hypothesis
   /* tag represents bitwise:
-   * int word : 23
+   * int word : 30
+   * bool prevSil   : 1
    * bool prevBlank : 1
    * int token : 8
    */
@@ -112,19 +113,21 @@ struct SimpleDecoderState {
       const float score,
       const int token,
       const int word,
-      const bool prevBlank = false)
+      const bool prevBlank = false,
+      const bool prevSil = false)
       : lmState(std::move(lmState)),
         parent(parent),
         score(score) {
           setToken(token);
           setWord(word);
+          setPrevSil(prevSil);
           setPrevBlank(prevBlank);
         }
 
   SimpleDecoderState()
       : parent(nullptr),
         score(0),
-        tag(0xfffffeff) {}
+        tag(0xFFFFFFFC) {}
 
   int getToken() const {
     return this->token;
@@ -134,20 +137,27 @@ struct SimpleDecoderState {
   }
 
   int getWord() const {
-    int32_t word = (tag & 0xFFFFFE00);
-    if (word == 0xFFFFFE00)
+    int32_t word = (tag & 0xFFFFFFFC);
+    if (word == 0xFFFFFFFC)
         return -1;
-    return word >> 9;
+    return word >> 2;
   }
   void setWord(int word) {
-    tag = (tag & ~0xFFFFFE00) | ((word << 9) & 0xFFFFFE00);
+    tag = (tag & ~0xFFFFFFFC) | ((word << 2) & 0xFFFFFFFC);
   }
 
   bool getPrevBlank() const {
-    return (tag >> 8) & 1;
+    return (tag & 1);
   }
   void setPrevBlank(bool prevBlank) {
-    tag = (tag & ~(1 << 8)) | (prevBlank & 1) << 8;
+    tag = (tag &~ 1) | (prevBlank & 1);
+  }
+
+  bool getPrevSil() const {
+    return !!(tag & 2);
+  }
+  void setPrevSil(bool prevSil) {
+    tag = (tag &~ 2) | ((prevSil & 1) << 1);
   }
 
   bool isComplete() const {
@@ -174,6 +184,7 @@ static void beamSearchNewCandidate(
         const float score,
         const int token,
         const int word,
+        const bool prevSil = false,
         const bool prevBlank = false)
 {
     if (score < bestScore - opt.beamThreshold)
@@ -183,7 +194,7 @@ static void beamSearchNewCandidate(
     }
     bestScore = std::max(bestScore, score);
     candidates.emplace_back(
-            std::move(lmState.actualize()), parent, score, token, word, prevBlank);
+            std::move(lmState.actualize()), parent, score, token, word, prevBlank, prevSil);
     if (candidates.size() == opt.beamSize * 2) {
         // saves us a push + pop
         std::pop_heap(candidates.begin(), candidates.end(), std::greater<SimpleDecoderState<LMStateType2>>());
@@ -459,6 +470,9 @@ auto BeamSearch<LM, LMStateType>::run(
             /* Try same lexicon node */
             if (repeatPrevLex) {
                 int n = prevIdx;
+                if (opt_.criterionType == CriterionType::CTC && prevHyp.getPrevSil()) {
+                    n = sil_;
+                }
                 float score = prevHyp.score + emissions[frame * nTokens_ + n];
                 if (frame > 0 && transitions_.size() > 0) {
                     score += transitions_[n * nTokens_ + prevIdx];
@@ -482,6 +496,7 @@ auto BeamSearch<LM, LMStateType>::run(
 
             /* CTC only, try blank */
             if (opt_.criterionType == CriterionType::CTC) {
+                bool prevSil = (prevIdx == blank_) ? prevHyp.getPrevSil() : (prevIdx == sil_);
                 int n = blank_;
                 double score = prevHyp.score + emissions[frame * nTokens_ + n] + opt_.silScore;
                 beamSearchNewCandidate(
@@ -493,7 +508,8 @@ auto BeamSearch<LM, LMStateType>::run(
                         score,
                         n,
                         -1,
-                        true // prevBlank
+                        prevSil, // prevSil
+                        true     // prevBlank
                         );
             }
         }
