@@ -611,7 +611,17 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
         transitions};
 
     if (opts.debug) {
-        std::cerr << "detecting in viterbi toks: " << tokensToString(viterbiToks, 0, viterbiToks.size()) << std::endl;
+        float viterbiScore = 0;
+        int N = emission->n_tokens;
+        for (int t = 0; t < emission->n_frames; t++) {
+            int n = viterbiToks[t];
+            viterbiScore += emission->matrix[t * N + n];
+            if (!transitions.empty() && t > 0) {
+                viterbiScore += transitions[n * N + viterbiToks[t - 1]];
+            }
+        }
+        auto s = tokensToString(viterbiToks, 0, viterbiToks.size());
+        std::cerr << s << " " << viterbiScore << " (viterbi)" << std::endl << std::endl;
     }
 
     auto appendSpaced = [&](const std::string &base, const std::string &str, bool command = false) {
@@ -672,7 +682,8 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
         for (const auto &beamEnd : beamEnds) {
             auto decodeResult = _getHypothesis(&beamEnd, emission->n_frames + 1);
             auto decoderToks = decodeResult.tokens;
-            std::cerr << decodeResult.score << " " << tokensToString(decoderToks, 1, decoderToks.size() - 1) << std::endl;
+            auto s = tokensToString(decoderToks, 1, decoderToks.size() - 1);
+            std::cerr << s << " " << decodeResult.score << std::endl;
         }
     }
 
@@ -699,7 +710,13 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
                 lastSilence = i;
         }
     }
-    if (opts.debug)
-        std::cerr << "  result: " << result << std::endl << std::endl;
+    if (opts.debug) {
+        if (result.empty()) {
+            std::cerr << "  [reject]";
+        } else {
+            std::cerr << "  result: \"" << result << "\"";
+        }
+        std::cerr << std::endl << std::endl;
+    }
     return strdup(result.c_str());
 }
