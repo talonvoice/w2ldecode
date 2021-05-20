@@ -667,7 +667,7 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
     }
 
     // Usually we take the best beam... but never take rejected beams.
-    if (beamEnds[0].score < -100000)
+    if (beamEnds[0].score < -90000)
         return nullptr;
 
     // convert the best beam to a result string
