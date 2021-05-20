@@ -22,6 +22,33 @@ using namespace w2l;
 #include "w2l_decode.h"
 #include "decode_core.cpp"
 
+struct WordInfo {
+    std::string word;
+    int start, end;
+
+    WordInfo(std::string _word, int _start, int _end) :
+        word(_word), start(_start), end(_end) {
+            ;
+    }
+};
+
+struct ResultInfo {
+    std::string text;
+    double score;
+    std::vector<struct WordInfo> words;
+
+    std::string joinWords() {
+        std::ostringstream ostr;
+        if (!words.empty()) {
+            ostr << words.front().word;
+            for (ssize_t i = 1; i < words.size(); i++) {
+                ostr << " " << words[i].word;
+            }
+        }
+        return ostr.str();
+    }
+};
+
 class GreedyDecoder {
 public:
     static void decodeASG(w2l_emission *emission, float *transitions, int *path_out) {
@@ -287,6 +314,8 @@ public:
     }
 
     char *decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+    w2l_decoder_result *decodeDFAPaths(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+    w2l_decoder_result *viterbiResult(const std::string &text, double viterbiScore);
 
     std::string tokensToString(const std::vector<int> &tokens, int from, int to) {
         std::string out;
@@ -297,37 +326,39 @@ public:
     };
 
     void tokensDedupToWords(const std::vector<int> &tokens, int from, int to,
-            std::vector<std::string> &wordsOut, std::vector<int> &wordEndsOut) {
+            std::vector<struct WordInfo> &wordsOut) {
         std::ostringstream oword;
         int tok = -1;
+        int lastSilence = from - 1;
         for (int i = from; i < to; ++i) {
-            if (tok == tokens[i])
+            if (tok == tokens[i]) {
+                if (tok == silIdx)
+                    lastSilence = i;
                 continue;
+            }
             tok = tokens[i];
             if (tok >= 0 && tok != blankIdx) {
                 std::string s = tokenDict.getEntry(tok);
                 if (!s.empty() && (s[0] == '_' || s[0] == '|')) {
                     if (oword.tellp() > 0) {
-                        wordsOut.push_back(oword.str());
-                        wordEndsOut.push_back(i + 1);
+                        // FIXME: use last non blank index here?
+                        // or for a run of blanks, use the first blank?
+                        int start = lastSilence + 1;
+                        int end = i;
+                        wordsOut.emplace_back(oword.str(), start, end);
                         oword = std::ostringstream();
                     }
                     s = s.substr(1);
+                    lastSilence = i;
                 }
                 oword << s;
             }
         }
         if (oword.tellp() > 0) {
-            wordsOut.push_back(oword.str());
-            wordEndsOut.push_back(to);
+            int start = lastSilence + 1;
+            int end = to;
+            wordsOut.emplace_back(oword.str(), start, end);
         }
-    };
-
-    std::string tokensToStringDedup(const std::vector<int> &tokens, int from, int to,
-            std::vector<int> &wordEndsOut) {
-        std::vector<std::string> words;
-        tokensDedupToWords(tokens, from, to, words, wordEndsOut);
-        return join(" ", words);
     };
 
     std::shared_ptr<KenLM> lm;
@@ -573,9 +604,47 @@ struct ViterbiDifferenceRejecter {
 };
 
 char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
-    // TODO: we already do viterbi from Talon, so allow passing in a cached viterbi path?
+    w2l_decoder_result *result = decodeDFAPaths(emission, dfa, dfa_size);
+    if (!result || result->n_paths < 1) {
+        return nullptr;
+    }
+    char *s = strdup(result->paths[0]->text);
+    free(result);
+    return s;
+}
+
+static float getViterbiScore(w2l_emission *emission, std::vector<int> &tokens, std::vector<float> &transitions) {
+    double viterbiScore = 0;
+    int N = emission->n_tokens;
+    for (int t = 0; t < emission->n_frames; t++) {
+        int n = tokens[t];
+        viterbiScore += emission->matrix[t * N + n];
+        if (!transitions.empty() && t > 0) {
+            viterbiScore += transitions[n * N + tokens[t - 1]];
+        }
+    }
+    return viterbiScore;
+}
+
+w2l_decoder_result *PublicDecoder::viterbiResult(const std::string &text, double viterbiScore) {
+    size_t size = offsetof(struct w2l_decoder_result, paths[0]);
+    auto result = (struct w2l_decoder_result *)calloc(1, size + text.size() + 1);
+    char *buf = (char *)&result->paths[0];
+    memcpy(buf, text.c_str(), text.size());
+    result->greedy_text = buf;
+    result->greedy_score = viterbiScore;
+    result->n_paths = 0;
+    return result;
+}
+
+w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
     std::vector<int> viterbiToks(emission->n_frames);
     decodeGreedy(emission, &viterbiToks[0]);
+
+    struct ResultInfo viterbiInfo;
+    tokensDedupToWords(viterbiToks, 0, viterbiToks.size() - 1, viterbiInfo.words);
+    auto viterbiText = viterbiInfo.joinWords();
+    double viterbiScore = getViterbiScore(emission, viterbiToks, transitions);
 
     // Lets skip decoding if viterbi thinks it's all silence
     bool allSilence = true;
@@ -585,8 +654,9 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
             break;
         }
     }
-    if (allSilence)
-        return nullptr;
+    if (allSilence) {
+        return viterbiResult(viterbiText, viterbiScore);
+    }
 
     auto dfalm = DFALM::LM{lm, lm->start(0), flatTrie, dfa, silIdx, decoderOpt.criterionType == CriterionType::ASG};
     dfalm.commandScore = opts.command_score;
@@ -653,45 +723,53 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
     // in a grammar state that isn't TERM
     std::vector<CombinedDecoder::DecoderState> beamEnds;
     beamSearchFinish(beamEnds, unfinishedBeams.hyp.back(), dfalm, decoderOpt);
-
-    if (beamEnds.empty())
-        return nullptr;
+    if (beamEnds.empty()) {
+        return viterbiResult(viterbiText, viterbiScore);
+    }
 
     auto results = _getAllHypothesis(beamEnds, unfinishedBeams.hyp.size());
-    std::vector<std::string> texts;
+    // We never take rejected beams.
+    // TODO: return rejected beams, and make the caller handle it by checking score?
+    if (beamEnds[0].score < -90000) {
+        return viterbiResult(viterbiText, viterbiScore);
+    }
+
+    std::vector<struct ResultInfo> resultsInfo;
     for (auto &result : results) {
-        if (opts.debug) {
-            auto decoderToks = result.tokens;
-            auto s = tokensToString(decoderToks, 1, decoderToks.size() - 1);
-            std::cerr << s << " " << result.score << std::endl;
-        }
-        std::vector<std::string> words;
-        std::vector<int> wordEnds;
+        struct ResultInfo info;
+        info.score = result.score;
         if (decoderOpt.criterionType == CriterionType::CTC) {
-            tokensDedupToWords(result.tokens, 1, result.tokens.size() - 1, words, wordEnds);
+            tokensDedupToWords(result.tokens, 1, result.tokens.size() - 1, info.words);
         } else {
             int lastSilence = -1;
             for (int i = 0; i < result.words.size() - 1; ++i) {
                 const auto label = result.words[i];
                 if (label >= 0 && label < dfalm.firstCommandLabel) {
-                    words.push_back(wordList[label]);
+                    info.words.emplace_back(wordList[label], lastSilence + 1, i);
                 } else if (label >= dfalm.firstCommandLabel) {
-                    words.push_back("@" + tokensToStringDedup(result.tokens, lastSilence + 1, i, wordEnds));
+                    struct ResultInfo commandInfo;
+                    tokensDedupToWords(result.tokens, lastSilence + 1, i, commandInfo.words);
+                    for (auto &word : commandInfo.words) {
+                        info.words.emplace_back("@" + word.word, word.start, word.end);
+                    }
                 }
                 const auto token = result.tokens[i];
                 if (token == silIdx)
                     lastSilence = i;
             }
         }
-        texts.push_back(join(" ", words));
+        // TODO: include the tokens in the result so the caller can print debug info instead of us?
+        if (opts.debug) {
+            auto decoderToks = result.tokens;
+            auto s = tokensToString(decoderToks, 1, decoderToks.size() - 1);
+            std::cerr << s << " " << result.score << std::endl;
+        }
+        info.text = info.joinWords();
+        resultsInfo.push_back(std::move(info));
     }
 
-    // Usually we take the best beam... but never take rejected beams.
-    if (beamEnds[0].score < -90000)
-        return nullptr;
-
-    std::string text = texts.front();
     if (opts.debug) {
+        auto &text = resultsInfo.front().text;
         if (text.empty()) {
             std::cerr << "  [reject]";
         } else {
@@ -699,5 +777,83 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
         }
         std::cerr << std::endl << std::endl;
     }
-    return strdup(text.c_str());
+
+    // prepare result object
+    size_t base_size      = offsetof(struct w2l_decoder_result, paths[0]);
+    size_t path_data_size = offsetof(struct w2l_decoder_path,   words[0]) * resultsInfo.size();
+    size_t path_ptr_size  = sizeof(struct w2l_decoder_path *) * resultsInfo.size();
+    int strpos = 0;
+
+    // build strtab offsets and count words
+    size_t word_count = 0;
+    strpos += viterbiText.size() + 1;
+    for (auto &info : resultsInfo) {
+        strpos += info.text.size() + 1;
+        for (auto &word : info.words) {
+            strpos += word.word.size() + 1;
+        }
+        word_count += info.words.size();
+    }
+    size_t path_size = path_ptr_size + path_data_size;
+    size_t word_size = sizeof(struct w2l_decoder_word) * word_count;
+
+    // allocate and fill result
+    auto result = (struct w2l_decoder_result *)calloc(1, base_size + path_size + word_size + strpos);
+    uintptr_t resultpos = (uintptr_t)result;
+    uintptr_t pathpos   = resultpos + base_size + path_ptr_size;
+    char *strtab = (char *)(pathpos + path_data_size + word_size);
+
+    strcpy(strtab, viterbiText.c_str());
+    result->greedy_text = strtab;
+    strtab += viterbiText.size() + 1;
+    result->greedy_score = viterbiScore;
+    result->n_paths = resultsInfo.size();
+
+    double frameCount = emission->n_frames;
+    ssize_t path_i = 0;
+    for (auto &info : resultsInfo) {
+        auto path = (struct w2l_decoder_path *)pathpos;
+        pathpos += offsetof(struct w2l_decoder_path, words[0]);
+        pathpos += sizeof(struct w2l_decoder_word) * info.words.size();
+        result->paths[path_i++] = path;
+
+        strcpy(strtab, info.text.c_str());
+        path->text = strtab;
+        strtab += info.text.size() + 1;
+
+        path->score = info.score;
+        path->n_words = info.words.size();
+
+        ssize_t word_i = 0;
+        for (auto &word : info.words) {
+            auto pathWord = &path->words[word_i++];
+            strcpy(strtab, word.word.c_str());
+            pathWord->word = strtab;
+            strtab += word.word.size() + 1;
+
+            pathWord->start = (double)word.start / frameCount;
+            pathWord->end   = (double)word.end   / frameCount;
+        }
+    }
+    /*
+    printf("result:\n");
+    printf("  greedy_text  = %s\n", result->greedy_text);
+    printf("  greedy_score = %f\n", result->greedy_score);
+    printf("  n_paths      = %d\n", result->n_paths);
+    for (int path_i = 0; path_i < result->n_paths; path_i++) {
+        auto path = result->paths[path_i];
+        printf("  path[%d]:\n", path_i);
+        printf("    text    = %s\n", path->text);
+        printf("    score   = %f\n", path->score);
+        printf("    n_words = %d\n", path->n_words);
+        for (int word_i = 0; word_i < path->n_words; word_i++) {
+            auto word = &path->words[word_i];
+            printf("    words[%d]:\n", word_i);
+            printf("      word  = %s\n", word->word);
+            printf("      start = %f\n", word->start);
+            printf("      end   = %f\n", word->end);
+        }
+    }
+    */
+    return result;
 }

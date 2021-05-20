@@ -93,9 +93,27 @@ typedef struct {
 w2l_decoder *w2l_decoder_new(const char *tokens, const char *kenlm_model_path, const char *lexicon_path, const w2l_decode_options *opts);
 bool w2l_decoder_load_trie(w2l_decoder *decoder, const char *trie_path);
 bool w2l_decoder_make_trie(w2l_decoder *decoder, const char *trie_path);
-
-char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission);
 void w2l_decoder_free(w2l_decoder *decoder);
+
+struct w2l_decoder_word {
+    const char *word;
+    // start/end position as floating point 0-100% of the input
+    double start, end;
+};
+
+struct w2l_decoder_path {
+    const char *text;
+    float score;
+    uint32_t n_words;
+    struct w2l_decoder_word words[1];
+};
+
+struct w2l_decoder_result {
+    const char *greedy_text;
+    float greedy_score;
+    uint32_t n_paths;
+    struct w2l_decoder_path *paths[1];
+};
 
 /** Decode emisssions according to dfa model, return decoded text.
  *
@@ -106,6 +124,12 @@ void w2l_decoder_free(w2l_decoder *decoder);
  * its address and edge offsets can be used to traverse the full dfa.
  */
 char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+
+// the result of this function is created with a single malloc() so it is safe to free()
+struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+
+// decode with LM only
+char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission);
 
 // greedy-decode an emission (e.g. viterbi or argmax)
 char *w2l_decoder_greedy(w2l_decoder *decoder, w2l_emission *emission);

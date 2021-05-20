@@ -56,23 +56,19 @@ char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node
     return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFA(emission, dfa, dfa_size);
 }
 
+struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
+    return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFAPaths(emission, dfa, dfa_size);
+}
+
 char *w2l_decoder_greedy(w2l_decoder *c_decoder, w2l_emission *emission) {
     auto decoder = reinterpret_cast<PublicDecoder *>(c_decoder);
     std::vector<int> path(emission->n_frames);
     decoder->decodeGreedy(emission, &path[0]);
 
-    std::ostringstream ostr;
-    int lastTok = -1;
-    for (int tok : path) {
-        if (tok == lastTok) continue;
-        lastTok = tok;
-        auto tokstr = decoder->tokenDict.getEntry(tok);
-        if (tokstr != kBlankToken) {
-            ostr << tokstr;
-        }
-    }
-    auto str = ostr.str();
-    return strdup(str.c_str());
+    struct ResultInfo info;
+    decoder->tokensDedupToWords(path, 0, path.size() - 1, info.words);
+    auto text = info.joinWords();
+    return strdup(text.c_str());
 }
 
 } // extern "C"
