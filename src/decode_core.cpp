@@ -568,7 +568,6 @@ static DecodeResult _getHypothesis(const DecoderState* node, const int finalFram
   if (!node_) {
     return DecodeResult();
   }
-
   DecodeResult res(finalFrame + 1);
   res.score = node_->score;
 
@@ -579,7 +578,19 @@ static DecodeResult _getHypothesis(const DecoderState* node, const int finalFram
     node_ = node_->parent;
     i++;
   }
+  return res;
+}
 
+template <class DecoderState>
+std::vector<DecodeResult> _getAllHypothesis(
+    const std::vector<DecoderState>& finalHyps,
+    const int finalFrame) {
+  int nHyp = finalHyps.size();
+  std::vector<DecodeResult> res(nHyp);
+  for (int r = 0; r < nHyp; r++) {
+    const DecoderState* node = &finalHyps[r];
+    res[r] = _getHypothesis(node, finalFrame);
+  }
   return res;
 }
 
