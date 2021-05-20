@@ -657,47 +657,47 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
     if (beamEnds.empty())
         return nullptr;
 
-    if (opts.debug) {
-        for (const auto &beamEnd : beamEnds) {
-            auto decodeResult = _getHypothesis(&beamEnd, emission->n_frames + 1);
-            auto decoderToks = decodeResult.tokens;
+    auto results = _getAllHypothesis(beamEnds, unfinishedBeams.hyp.size());
+    std::vector<std::string> texts;
+    for (auto &result : results) {
+        if (opts.debug) {
+            auto decoderToks = result.tokens;
             auto s = tokensToString(decoderToks, 1, decoderToks.size() - 1);
-            std::cerr << s << " " << decodeResult.score << std::endl;
+            std::cerr << s << " " << result.score << std::endl;
         }
+        std::vector<std::string> words;
+        std::vector<int> wordEnds;
+        if (decoderOpt.criterionType == CriterionType::CTC) {
+            tokensDedupToWords(result.tokens, 1, result.tokens.size() - 1, words, wordEnds);
+        } else {
+            int lastSilence = -1;
+            for (int i = 0; i < result.words.size() - 1; ++i) {
+                const auto label = result.words[i];
+                if (label >= 0 && label < dfalm.firstCommandLabel) {
+                    words.push_back(wordList[label]);
+                } else if (label >= dfalm.firstCommandLabel) {
+                    words.push_back("@" + tokensToStringDedup(result.tokens, lastSilence + 1, i, wordEnds));
+                }
+                const auto token = result.tokens[i];
+                if (token == silIdx)
+                    lastSilence = i;
+            }
+        }
+        texts.push_back(join(" ", words));
     }
 
     // Usually we take the best beam... but never take rejected beams.
     if (beamEnds[0].score < -90000)
         return nullptr;
 
-    // convert the best beam to a result string
-    auto decodeResult = _getHypothesis(&beamEnds[0], unfinishedBeams.hyp.size());
-    std::vector<std::string> words;
-    std::vector<int> wordEnds;
-    if (decoderOpt.criterionType == CriterionType::CTC) {
-        tokensDedupToWords(decodeResult.tokens, 1, decodeResult.tokens.size() - 1, words, wordEnds);
-    } else {
-        int lastSilence = -1;
-        for (int i = 0; i < decodeResult.words.size() - 1; ++i) {
-            const auto label = decodeResult.words[i];
-            if (label >= 0 && label < dfalm.firstCommandLabel) {
-                words.push_back(wordList[label]);
-            } else if (label >= dfalm.firstCommandLabel) {
-                words.push_back("@" + tokensToStringDedup(decodeResult.tokens, lastSilence + 1, i, wordEnds));
-            }
-            const auto token = decodeResult.tokens[i];
-            if (token == silIdx)
-                lastSilence = i;
-        }
-    }
-    std::string result = join(" ", words);
+    std::string text = texts.front();
     if (opts.debug) {
-        if (result.empty()) {
+        if (text.empty()) {
             std::cerr << "  [reject]";
         } else {
-            std::cerr << "  result: \"" << result << "\"";
+            std::cerr << "  result: \"" << text << "\"";
         }
         std::cerr << std::endl << std::endl;
     }
-    return strdup(result.c_str());
+    return strdup(text.c_str());
 }
