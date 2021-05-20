@@ -9,6 +9,7 @@
 #include "fl-derived/Transforms.h"
 #include "fl-derived/Dictionary.h"
 #include "fl-derived/DecoderUtils.h"
+#include "fl-derived/LibraryUtils.h"
 #include "fl-derived/Trie.h"
 #include "fl-derived/KenLM.h"
 #include "fl-derived/WordUtils.h"
@@ -20,11 +21,6 @@ using namespace w2l;
 
 #include "w2l_decode.h"
 #include "decode_core.cpp"
-
-namespace w2l {
-// from common/Utils.h (which includes flashlight, so we don't include it)
-std::string join(const std::string& delim, const std::vector<std::string>& vec);
-}
 
 class GreedyDecoder {
 public:
@@ -270,23 +266,8 @@ public:
     }
 
     char *decode(w2l_emission *emission) {
-        KenFlatTrieLM::State startState;
-        startState.lex = flatTrie->getRoot();
-        startState.kenState = lm->start(0);
-
-        KenFlatTrieLM::LM lmWrap;
-        lmWrap.ken = lm;
-        lmWrap.trie = flatTrie;
-        auto decoder = SimpleDecoder<KenFlatTrieLM::LM, KenFlatTrieLM::State>{
-            lmWrap,
-            silIdx,
-            blankIdx,
-            unkLabel,
-            transitions};
-        auto decodeResult = decoder.normal(decoderOpt, emission, startState);
-        std::string s = tokensToStringDedup(decodeResult.tokens, 1, decodeResult.tokens.size() - 1);
-        return strdup(s.c_str());
-        //return decoder.groupThreading(emissionVec.data(), T, N);
+        const char *dfa = "\x01\x01\x00\xfe\xff\x00\x00\x00\x00";
+        return decodeDFA(emission, (w2l_dfa_node *)dfa, sizeof(dfa));
     }
 
     void decodeGreedy(w2l_emission *emission, int *path) {
@@ -315,10 +296,10 @@ public:
         return out;
     };
 
-    std::string tokensToStringDedup(const std::vector<int> &tokens, int from, int to) {
-        std::ostringstream ostr;
+    void tokensDedupToWords(const std::vector<int> &tokens, int from, int to,
+            std::vector<std::string> &wordsOut, std::vector<int> &wordEndsOut) {
+        std::ostringstream oword;
         int tok = -1;
-        bool lastSil = false;
         for (int i = from; i < to; ++i) {
             if (tok == tokens[i])
                 continue;
@@ -326,19 +307,27 @@ public:
             if (tok >= 0 && tok != blankIdx) {
                 std::string s = tokenDict.getEntry(tok);
                 if (!s.empty() && (s[0] == '_' || s[0] == '|')) {
-                    if (ostr.tellp() > 0 && !lastSil) {
-                        ostr << " ";
-                        lastSil = true;
+                    if (oword.tellp() > 0) {
+                        wordsOut.push_back(oword.str());
+                        wordEndsOut.push_back(i + 1);
+                        oword = std::ostringstream();
                     }
                     s = s.substr(1);
                 }
-                if (!s.empty()) {
-                    lastSil = s.back() == ' ';
-                    ostr << s;
-                }
+                oword << s;
             }
         }
-        return ostr.str();
+        if (oword.tellp() > 0) {
+            wordsOut.push_back(oword.str());
+            wordEndsOut.push_back(to);
+        }
+    };
+
+    std::string tokensToStringDedup(const std::vector<int> &tokens, int from, int to,
+            std::vector<int> &wordEndsOut) {
+        std::vector<std::string> words;
+        tokensDedupToWords(tokens, from, to, words, wordEndsOut);
+        return join(" ", words);
     };
 
     std::shared_ptr<KenLM> lm;
@@ -624,16 +613,6 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
         std::cerr << s << " " << viterbiScore << " (viterbi)" << std::endl << std::endl;
     }
 
-    auto appendSpaced = [&](const std::string &base, const std::string &str, bool command = false) {
-        std::string out = base;
-        if (!out.empty())
-            out += " ";
-        if (command)
-            out += "@";
-        out += str;
-        return out;
-    };
-
     ViterbiDifferenceRejecter rejecter;
     rejecter.windowMaxSize = opts.rejection_window_frames;
     if (rejecter.windowMaxSize <= 0) {
@@ -693,23 +672,25 @@ char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t
 
     // convert the best beam to a result string
     auto decodeResult = _getHypothesis(&beamEnds[0], unfinishedBeams.hyp.size());
-    std::string result;
+    std::vector<std::string> words;
+    std::vector<int> wordEnds;
     if (decoderOpt.criterionType == CriterionType::CTC) {
-        result = tokensToStringDedup(decodeResult.tokens, 1, decodeResult.tokens.size() - 1);
+        tokensDedupToWords(decodeResult.tokens, 1, decodeResult.tokens.size() - 1, words, wordEnds);
     } else {
         int lastSilence = -1;
         for (int i = 0; i < decodeResult.words.size() - 1; ++i) {
             const auto label = decodeResult.words[i];
             if (label >= 0 && label < dfalm.firstCommandLabel) {
-                result = appendSpaced(result, wordList[label], false);
+                words.push_back(wordList[label]);
             } else if (label >= dfalm.firstCommandLabel) {
-                result = appendSpaced(result, tokensToStringDedup(decodeResult.tokens, lastSilence + 1, i), true);
+                words.push_back("@" + tokensToStringDedup(decodeResult.tokens, lastSilence + 1, i, wordEnds));
             }
             const auto token = decodeResult.tokens[i];
             if (token == silIdx)
                 lastSilence = i;
         }
     }
+    std::string result = join(" ", words);
     if (opts.debug) {
         if (result.empty()) {
             std::cerr << "  [reject]";
