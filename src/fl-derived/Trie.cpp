@@ -6,11 +6,13 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#include <math.h>
-#include <stdlib.h>
+#include <algorithm>
+#include <functional>
 #include <iostream>
 #include <limits>
-#include <functional>
+#include <math.h>
+#include <stdlib.h>
+#include <string>
 
 #include "Trie.h"
 

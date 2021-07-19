@@ -93,7 +93,7 @@ struct FlatTrieNode
 
         // non-binary search
         /*
-        for (ssize_t i = 0; i < nChildren; i++) {
+        for (size_t i = 0; i < nChildren; i++) {
             auto child = this->child(i);
             if (child->idx == token) {
                 return child;

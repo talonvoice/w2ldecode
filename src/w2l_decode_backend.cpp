@@ -41,7 +41,7 @@ struct ResultInfo {
         std::ostringstream ostr;
         if (!words.empty()) {
             ostr << words.front().word;
-            for (ssize_t i = 1; i < words.size(); i++) {
+            for (size_t i = 1; i < words.size(); i++) {
                 ostr << " " << words[i].word;
             }
         }
@@ -810,7 +810,7 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
     result->n_paths = resultsInfo.size();
 
     double frameCount = emission->n_frames;
-    ssize_t path_i = 0;
+    size_t path_i = 0;
     for (auto &info : resultsInfo) {
         auto path = (struct w2l_decoder_path *)pathpos;
         pathpos += offsetof(struct w2l_decoder_path, words[0]);
@@ -824,7 +824,7 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
         path->score = info.score;
         path->n_words = info.words.size();
 
-        ssize_t word_i = 0;
+        size_t word_i = 0;
         for (auto &word : info.words) {
             auto pathWord = &path->words[word_i++];
             strcpy(strtab, word.word.c_str());

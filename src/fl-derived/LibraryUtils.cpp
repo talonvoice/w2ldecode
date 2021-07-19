@@ -6,20 +6,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-#ifdef _WIN32
-#define _POSIX_THREAD_SAFE_FUNCTIONS
-#include <time.h>
-#include <direct.h>
-#endif
-
 #include "LibraryUtils.h"
-
-#include <sys/stat.h>
-#include <sys/types.h>
 
 #include <array>
 #include <cstdlib>
-#include <ctime>
 #include <fstream>
 #include <functional>
 
@@ -127,81 +117,9 @@ std::string pathsConcat(const std::string& p1, const std::string& p2) {
   }
 }
 
-bool dirExists(const std::string& path) {
-  struct stat info;
-  if (stat(path.c_str(), &info) != 0) {
-    return false;
-  } else if (info.st_mode & S_IFDIR) {
-    return true;
-  } else {
-    return false;
-  }
-}
-
-void dirCreate(const std::string& path) {
-  if (dirExists(path)) {
-    return;
-  }
-  mode_t nMode = 0755;
-  int nError = 0;
-#ifdef _WIN32
-  nError = _mkdir(path.c_str());
-#else
-  nError = mkdir(path.c_str(), nMode);
-#endif
-  if (nError != 0) {
-    throw std::runtime_error(
-        std::string() + "Unable to create directory - " + path);
-  }
-}
-
 bool fileExists(const std::string& path) {
   std::ifstream fs(path, std::ifstream::in);
   return fs.good();
-}
-
-std::string getEnvVar(
-    const std::string& key,
-    const std::string& dflt /*= "" */) {
-  char* val = getenv(key.c_str());
-  return val ? std::string(val) : dflt;
-}
-
-std::string getCurrentDate() {
-  time_t now = time(nullptr);
-  struct tm tmbuf;
-  struct tm* tstruct;
-  tstruct = localtime_r(&now, &tmbuf);
-
-  std::array<char, 80> buf;
-  strftime(buf.data(), buf.size(), "%Y-%m-%d", tstruct);
-  return std::string(buf.data());
-}
-
-std::string getCurrentTime() {
-  time_t now = time(nullptr);
-  struct tm tmbuf;
-  struct tm* tstruct;
-  tstruct = localtime_r(&now, &tmbuf);
-
-  std::array<char, 80> buf;
-  strftime(buf.data(), buf.size(), "%X", tstruct);
-  return std::string(buf.data());
-}
-
-std::vector<std::string> getFileContent(const std::string& file) {
-  std::vector<std::string> data;
-  std::ifstream in(file);
-  if (!in.good()) {
-    throw std::runtime_error(
-        std::string() + "Could not read file '" + file + "'");
-  }
-  std::string str;
-  while (std::getline(in, str)) {
-    data.emplace_back(str);
-  }
-  in.close();
-  return data;
 }
 
 } // namespace w2l

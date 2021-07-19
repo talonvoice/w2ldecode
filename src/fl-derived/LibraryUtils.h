@@ -78,21 +78,9 @@ std::string format(const char* fmt, Args&&... args);
 
 std::string pathsConcat(const std::string& p1, const std::string& p2);
 
-bool dirExists(const std::string& path);
-
-void dirCreate(const std::string& path);
-
 bool fileExists(const std::string& path);
 
-std::string getEnvVar(const std::string& key, const std::string& dflt = "");
-
-std::string getCurrentDate();
-
-std::string getCurrentTime();
-
 // =============================== Miscellaneous ===============================
-
-std::vector<std::string> getFileContent(const std::string& file);
 
 /**
  * Calls `f(args...)` repeatedly, retrying if an exception is thrown.

@@ -194,7 +194,7 @@ template <class Compare> void SizedSort(void *start, void *end, std::size_t elem
       {
         FreePool pool(element_size);
         // TODO is this necessary anymore?
-  #if defined(_WIN32) || defined(_WIN64)
+  #if (defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)
         std::stable_sort
   #else
         std::sort
