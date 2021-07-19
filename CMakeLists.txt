@@ -18,7 +18,6 @@ target_compile_features(w2ldecode-obj PRIVATE cxx_std_17)
 
 add_library(w2ldecode        SHARED $<TARGET_OBJECTS:w2ldecode-obj> $<TARGET_OBJECTS:kenlm-obj>)
 add_library(w2ldecode-static STATIC $<TARGET_OBJECTS:w2ldecode-obj> $<TARGET_OBJECTS:kenlm-obj>)
-set_target_properties(w2ldecode-static PROPERTIES OUTPUT_NAME w2ldecode)
 
 install(FILES src/w2l_common.h src/w2l_decode.h DESTINATION include)
 install(TARGETS w2ldecode w2ldecode-static DESTINATION lib)
