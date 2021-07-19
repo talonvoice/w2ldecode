@@ -1,8 +1,8 @@
 #ifndef UTIL_SIZED_ITERATOR_H
 #define UTIL_SIZED_ITERATOR_H
 
-#include "util/pool.hh"
-#include "util/proxy_iterator.hh"
+#include "pool.hh"
+#include "proxy_iterator.hh"
 
 #include <algorithm>
 #include <functional>
@@ -194,7 +194,7 @@ template <class Compare> void SizedSort(void *start, void *end, std::size_t elem
       {
         FreePool pool(element_size);
         // TODO is this necessary anymore?
-  #if (defined(_WIN32) || defined(_WIN64)) && !defined(__clang__)
+  #if defined(_WIN32) || defined(_WIN64)
         std::stable_sort
   #else
         std::sort
