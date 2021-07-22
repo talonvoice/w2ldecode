@@ -101,14 +101,14 @@ void Trie::smear(SmearingMode smearMode) {
   }
 }
 
-FlatTrie toFlatTrie(const TrieNode *root) {
+FlatTrie toFlatTrie(const TrieNode *root, std::vector<float> &wordScores) {
     std::vector<int32_t> out;
     std::unordered_map<const TrieNode *, size_t> zeroOffsets;
 
     // All fields have size 4; number of fields needed
     auto flatTrieNodeN = [](const TrieNode *node)
     {
-        return 4 + node->children.size() + node->labels.size();
+        return 4 + node->children.size() + node->labels.size() * 2;
     };
 
     std::function<void (const TrieNode *)> allocAndMap;
@@ -144,8 +144,11 @@ FlatTrie toFlatTrie(const TrieNode *root) {
         for (const auto &pair : children) {
             flat->data[iChild++] = zeroOffsets[pair.second.get()] - thisOffset;
         }
-        for (int i = 0; i < node->labels.size(); ++i) {
+        int nLabel = node->labels.size();
+        for (int i = 0; i < nLabel; ++i) {
+            int label = node->labels[i];
             flat->data[iChild + i] = node->labels[i];
+            flat->data[iChild + nLabel + i] = wordScores[label];
         }
         std::sort(flat->data + iChild, flat->data + iChild + node->labels.size());
         for (const auto &child : children)

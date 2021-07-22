@@ -63,6 +63,7 @@ struct FlatTrieNode
 
     // nChildren children offsets
     // nLabel labels
+    // nLabel scores
     int32_t data[1];
 
     const FlatTrieNode *child(size_t i) const {
@@ -72,6 +73,10 @@ struct FlatTrieNode
 
     int32_t label(size_t i) const {
         return data[nChildren + i];
+    }
+
+    float score(size_t i) const {
+        return data[nChildren + nLabel + i];
     }
 
     const FlatTrieNode *find(size_t token) const {
@@ -122,7 +127,7 @@ using FlatTriePtr = std::shared_ptr<FlatTrie>;
 /**
  * Converts a regular trie to the flattened form.
  */
-FlatTrie toFlatTrie(const TrieNode *trie);
+FlatTrie toFlatTrie(const TrieNode *trie, std::vector<float> &wordScores);
 
 using TrieNodePtr = std::shared_ptr<TrieNode>;
 

@@ -168,7 +168,7 @@ public:
 
     // FLATTRIE HEADER:
     //  0: 'FLAT' (magic)
-    //  4: 4-byte version (1)
+    //  4: 4-byte version (2)
     //  8: 32-byte  src file hash slot (written as zeroes, up to the caller to fill/check it)
     // 40: 32-byte trie file hash slot (written as zeroes, up to the caller to fill/check it)
     // 72: 8-byte data size
@@ -193,7 +193,7 @@ public:
         if (memcmp(magic, "FLAT", 4) != 0) {
             return false;
         }
-        if (version != 1) {
+        if (version != 2) {
             return false;
         }
         if ((byteSize % 4) != 0) {
@@ -218,6 +218,7 @@ public:
 
         // taken from Decode.cpp
         // Build Trie
+        std::vector<float> wordScores(wordDict.indexSize());
         Trie trie(tokenDict.indexSize(), silIdx);
         auto startState = lm->start(false);
         for (auto& it : lexicon) {
@@ -232,6 +233,7 @@ public:
             for (auto& tokens : it.second) {
                 auto tokensTensor = tkn2Idx(tokens, tokenDict, false /* replabel */ );
                 trie.insert(tokensTensor, usrIdx, score);
+                wordScores[usrIdx] = score;
             }
         }
 
@@ -250,14 +252,14 @@ public:
         */
         trie.smear(smear_mode);
 
-        auto flatTrie = toFlatTrie(trie.getRoot());
+        auto flatTrie = toFlatTrie(trie.getRoot(), wordScores);
         std::ofstream out(triePath, std::ios::out | std::ios::trunc | std::ios::binary);
         if (!out.is_open())
             return false;
 
         // header is described above the loadTrie() method
         const char *magic = "FLAT";
-        uint32_t version = 1;
+        uint32_t version = 2;
         char zeroHash[32];
         memset(zeroHash, 0, 32);
         uint64_t byteSize = 4 * flatTrie.storage.size();
