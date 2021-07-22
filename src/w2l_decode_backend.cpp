@@ -162,7 +162,9 @@ public:
         }
 
         wordList = loadWordList(lexiconPath);
-        lm = std::make_shared<KenLM>(languageModelPath, wordList);
+        if (languageModelPath) {
+            lm = std::make_shared<KenLM>(languageModelPath, wordList);
+        }
     }
     ~PublicDecoder() {}
 
@@ -209,6 +211,9 @@ public:
     }
 
     bool makeTrie(const char *triePath) {
+        if (!lm) {
+            return false;
+        }
         auto lexicon = loadWords(lexiconPath, -1);
         Dictionary wordDict;
         for (const auto& it : wordList) {
@@ -445,12 +450,19 @@ struct State {
             const auto n = dictLex->nLabel;
             for (int i = 0; i < n; ++i) {
                 int label = dictLex->label(i);
-                auto kenAndScore = lm.ken->score(kenState, label);
+                float score = 0.0;
                 State it;
                 it.grammarLex = grammarLex;
                 it.dictLex = nullptr;
-                it.kenState = std::move(kenAndScore.first);
-                fn(std::move(it), label, kenAndScore.second);
+                if (lm.ken) {
+                    auto kenAndScore = lm.ken->score(kenState, label);
+                    it.kenState = std::move(kenAndScore.first);
+                    score = kenAndScore.second;
+                } else {
+                    it.kenState = nullptr;
+                    score = dictLex->score(i);
+                }
+                fn(std::move(it), label, score);
             }
             return;
         }
@@ -660,7 +672,8 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
         return viterbiResult(viterbiText, viterbiScore);
     }
 
-    auto dfalm = DFALM::LM{lm, lm->start(0), flatTrie, dfa, silIdx, decoderOpt.criterionType == CriterionType::ASG};
+    LMStatePtr start = lm ? lm->start(0) : nullptr;
+    auto dfalm = DFALM::LM{lm, start, flatTrie, dfa, silIdx, decoderOpt.criterionType == CriterionType::ASG};
     dfalm.commandScore = opts.command_score;
     dfalm.firstCommandLabel = wordList.size();
 

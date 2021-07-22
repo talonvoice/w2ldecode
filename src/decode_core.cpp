@@ -11,13 +11,16 @@ namespace KenFlatTrieLM {
 
     // Every DecoderState will store a State.
     struct State {
-        LMStatePtr kenState;
+        LMStatePtr kenState = nullptr;
         const FlatTrieNode *lex = nullptr;
 
         // used for making an unordered_set of const State*
         struct Hash {
             const LM &lm_;
             size_t operator()(const State *v) const {
+                if (! v->kenState) {
+                    return size_t(v->lex);
+                }
                 return lm::ngram::hash_value(*static_cast<KenLMState*>(v->kenState.get())->ken()) ^ size_t(v->lex);
             }
         };
@@ -47,11 +50,18 @@ namespace KenFlatTrieLM {
                 const auto n = lex->nLabel;
                 for (int i = 0; i < n; ++i) {
                     int label = lex->label(i);
-                    auto kenAndScore = lm.ken->score(base.kenState, label);
+                    float score = 0.0;
                     State it;
-                    it.kenState = std::move(kenAndScore.first);
                     it.lex = lm.trie->getRoot();
-                    fn(std::move(it), label, kenAndScore.second);
+                    if (lm.ken) {
+                        auto kenAndScore = lm.ken->score(base.kenState, label);
+                        it.kenState = std::move(kenAndScore.first);
+                        score = kenAndScore.second;
+                    } else {
+                        it.kenState = nullptr;
+                        score = lex->score(i);
+                    }
+                    fn(std::move(it), label, score);
                 }
             }
 
@@ -63,9 +73,13 @@ namespace KenFlatTrieLM {
         // Call finish() on the lm, like for end-of-sentence scoring
         std::pair<State, float> finish(const LM &lm) const {
             State result = *this;
-            auto p = lm.ken->finish(kenState);
-            result.kenState = p.first;
-            return {result, p.second};
+            float score = 0.0;
+            if (lm.ken) {
+                auto p = lm.ken->finish(kenState);
+                result.kenState = p.first;
+                score = p.second;
+            }
+            return {result, score};
         }
 
         float maxWordScore() const {
@@ -250,7 +264,6 @@ static void beamSearchFinish(
 
     for (const auto& prevHyp : hypIn) {
         const auto& prevLmState = prevHyp.lmState;
-
         auto lmStateScorePair = prevLmState.finish(lm);
         beamSearchNewCandidate(
                     candidates,
