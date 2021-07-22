@@ -11,8 +11,27 @@
 #include "fl-derived/DecoderUtils.h"
 #include "fl-derived/LibraryUtils.h"
 #include "fl-derived/Trie.h"
-#include "fl-derived/KenLM.h"
 #include "fl-derived/WordUtils.h"
+
+#ifdef USE_KENLM
+#include "fl-derived/KenLM.h"
+#else
+
+struct KenLMState : w2l::LMState {
+    KenLMState *ken() { return this; }
+};
+using KenLM = w2l::LM;
+
+namespace lm {
+namespace ngram {
+    size_t hash_value(const KenLMState &state, uint64_t seed = 0) {
+        return seed;
+    }
+}
+}
+
+typedef std::shared_ptr<KenLM> KenLMPtr;
+#endif
 
 // for viterbi path
 #include "fl-derived/ViterbiPath.h"
@@ -162,9 +181,11 @@ public:
         }
 
         wordList = loadWordList(lexiconPath);
+#ifdef USE_KENLM
         if (languageModelPath) {
             lm = std::make_shared<KenLM>(languageModelPath, wordList);
         }
+#endif
     }
     ~PublicDecoder() {}
 
@@ -368,7 +389,7 @@ public:
         }
     };
 
-    std::shared_ptr<KenLM> lm;
+    KenLMPtr lm;
     FlatTriePtr flatTrie;
     std::string lexiconPath;
     std::vector<std::string> wordList;
