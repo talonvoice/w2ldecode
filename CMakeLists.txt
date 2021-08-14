@@ -1,7 +1,12 @@
-cmake_minimum_required(VERSION 3.5.1)
+cmake_minimum_required(VERSION 3.15)
 project(libw2ldecode)
 
 option(USE_KENLM "Build with kenlm" ON)
+option(MSVC_STATIC "Statically link MSVC runtimes" OFF)
+
+if (MSVC_STATIC)
+    set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreaded$<$<CONFIG:Debug>:Debug>")
+endif()
 
 if (USE_KENLM)
     file(GLOB KENLM kenlm/lm/*.cc kenlm/util/*.cc kenlm/util/double-conversion/*.cc)
