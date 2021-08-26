@@ -424,7 +424,6 @@ struct LM {
     FlatTriePtr trie;
     const w2l_dfa_node *dfa;
     int silToken;
-    bool charLM;
     int firstCommandLabel = 0;
 
     const w2l_dfa_node *get(const w2l_dfa_node *base, const int32_t idx) const {
@@ -489,7 +488,7 @@ struct State {
         }
 
         // command labels are offsets from lm.dfa, plus the firstCommandLabel value
-        if (lm.charLM && wordEnd) {
+        if (wordEnd) {
             fn(*this, lm.firstCommandLabel + (reinterpret_cast<const uint8_t*>(grammarLex) - reinterpret_cast<const uint8_t*>(lm.dfa)), lm.commandScore);
         }
     }
@@ -694,7 +693,7 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
     }
 
     LMStatePtr start = lm ? lm->start(0) : nullptr;
-    auto dfalm = DFALM::LM{lm, start, flatTrie, dfa, silIdx, decoderOpt.criterionType == CriterionType::ASG};
+    auto dfalm = DFALM::LM{lm, start, flatTrie, dfa, silIdx};
     dfalm.commandScore = opts.command_score;
     dfalm.firstCommandLabel = wordList.size();
 
@@ -774,25 +773,25 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
     for (auto &result : results) {
         struct ResultInfo info;
         info.score = result.score;
-        if (decoderOpt.criterionType == CriterionType::CTC) {
-            tokensDedupToWords(result.tokens, 1, result.tokens.size() - 1, info.words);
-        } else {
-            int lastSilence = -1;
-            for (int i = 0; i < result.words.size() - 1; ++i) {
-                const auto label = result.words[i];
-                if (label >= 0 && label < dfalm.firstCommandLabel) {
-                    info.words.emplace_back(wordList[label], lastSilence + 1, i);
-                } else if (label >= dfalm.firstCommandLabel) {
-                    struct ResultInfo commandInfo;
-                    tokensDedupToWords(result.tokens, lastSilence + 1, i, commandInfo.words);
-                    for (auto &word : commandInfo.words) {
+        int lastSilence = -1;
+        for (int i = 0; i < result.words.size() - 1; ++i) {
+            const auto label = result.words[i];
+            if (label >= 0 && label < dfalm.firstCommandLabel) {
+                info.words.emplace_back(wordList[label], lastSilence + 1, i);
+            } else if (label >= dfalm.firstCommandLabel) {
+                struct ResultInfo commandInfo;
+                tokensDedupToWords(result.tokens, lastSilence + 1, i, commandInfo.words);
+                for (auto &word : commandInfo.words) {
+                    if (decoderOpt.criterionType == CriterionType::ASG) {
                         info.words.emplace_back("@" + word.word, word.start, word.end);
+                    } else {
+                        info.words.emplace_back(word.word, word.start, word.end);
                     }
                 }
-                const auto token = result.tokens[i];
-                if (token == silIdx)
-                    lastSilence = i;
             }
+            const auto token = result.tokens[i];
+            if (token == silIdx)
+                lastSilence = i;
         }
         // TODO: include the tokens in the result so the caller can print debug info instead of us?
         if (opts.debug) {
