@@ -183,7 +183,13 @@ public:
         wordList = loadWordList(lexiconPath);
 #ifdef USE_KENLM
         if (languageModelPath) {
-            lm = std::make_shared<KenLM>(languageModelPath, wordList);
+            std::vector<std::string> lowercaseWordList;
+            lowercaseWordList.reserve(wordList.size());
+            for (std::string word : wordList) {
+                std::transform(word.begin(), word.end(), word.begin(), [](char c){ return std::tolower(c); });
+                lowercaseWordList.push_back(word);
+            }
+            lm = std::make_shared<KenLM>(languageModelPath, lowercaseWordList);
         }
 #endif
     }
