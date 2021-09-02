@@ -185,7 +185,7 @@ public:
 
     // FLATTRIE HEADER:
     //  0: 'FLAT' (magic)
-    //  4: 4-byte version (2)
+    //  4: 4-byte version (3)
     //  8: 32-byte  src file hash slot (written as zeroes, up to the caller to fill/check it)
     // 40: 32-byte trie file hash slot (written as zeroes, up to the caller to fill/check it)
     // 72: 8-byte data size
@@ -210,7 +210,7 @@ public:
         if (memcmp(magic, "FLAT", 4) != 0) {
             return false;
         }
-        if (version != 2) {
+        if (version != 3) {
             return false;
         }
         if ((byteSize % 4) != 0) {
@@ -279,7 +279,7 @@ public:
 
         // header is described above the loadTrie() method
         const char *magic = "FLAT";
-        uint32_t version = 2;
+        uint32_t version = 3;
         char zeroHash[32];
         memset(zeroHash, 0, 32);
         uint64_t byteSize = 4 * flatTrie.storage.size();
