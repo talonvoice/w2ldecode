@@ -76,7 +76,8 @@ struct FlatTrieNode
     }
 
     float score(size_t i) const {
-        return data[nChildren + nLabel + i];
+        auto floatData = reinterpret_cast<const float *>(&data[0]);
+        return floatData[nChildren + nLabel + i];
     }
 
     const FlatTrieNode *find(size_t token) const {

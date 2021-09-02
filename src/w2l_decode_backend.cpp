@@ -13,24 +13,9 @@
 #include "fl-derived/Trie.h"
 #include "fl-derived/WordUtils.h"
 
+#include "fl-derived/ZeroLM.h"
 #ifdef USE_KENLM
 #include "fl-derived/KenLM.h"
-#else
-
-struct KenLMState : w2l::LMState {
-    KenLMState *ken() { return this; }
-};
-using KenLM = w2l::LM;
-
-namespace lm {
-namespace ngram {
-    size_t hash_value(const KenLMState &state, uint64_t seed = 0) {
-        return seed;
-    }
-}
-}
-
-typedef std::shared_ptr<KenLM> KenLMPtr;
 #endif
 
 // for viterbi path
@@ -480,11 +465,11 @@ struct State {
                 State it;
                 it.grammarLex = grammarLex;
                 it.dictLex = nullptr;
-                if (lm.scorer) {
-                    std::tie(it.lmState, score) = lm.scorer->score(lmState, label);
-                } else {
-                    it.lmState = nullptr;
-                    score = dictLex->score(i);
+
+                std::tie(it.lmState, score) = lm.scorer->score(lmState, label);
+                auto zeroLM = dynamic_cast<ZeroLM *>(lm.scorer.get());
+                if (zeroLM) {
+                    score += dictLex->score(i);
                 }
                 fn(std::move(it), label, score);
             }
@@ -504,6 +489,9 @@ struct State {
     }
 
     float maxWordScore() const {
+        if (dictLex) {
+            return dictLex->maxScore;
+        }
         return 0; // could control whether the beam search gets scores before finishing commands
     }
 

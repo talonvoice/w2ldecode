@@ -131,6 +131,7 @@ FlatTrie toFlatTrie(const TrieNode *root, std::vector<float> &wordScores) {
     writeData = [&](const TrieNode *node) {
         auto thisOffset = zeroOffsets[node];
         auto flat = reinterpret_cast<FlatTrieNode *>(&out[thisOffset]);
+        auto floatData = reinterpret_cast<float *>(&flat->data[0]);
         flat->idx = node->idx;
         flat->maxScore = node->maxScore;
         flat->nChildren = node->children.size();
@@ -148,7 +149,7 @@ FlatTrie toFlatTrie(const TrieNode *root, std::vector<float> &wordScores) {
         for (int i = 0; i < nLabel; ++i) {
             int label = node->labels[i];
             flat->data[iChild + i] = node->labels[i];
-            flat->data[iChild + nLabel + i] = wordScores[label];
+            floatData[iChild + nLabel + i] = wordScores[label];
         }
         std::sort(flat->data + iChild, flat->data + iChild + node->labels.size());
         for (const auto &child : children)
