@@ -177,6 +177,9 @@ public:
             lm = std::make_shared<KenLM>(languageModelPath, lowercaseWordList);
         }
 #endif
+        if (! lm) {
+            lm = std::make_shared<ZeroLM>();
+        }
     }
     ~PublicDecoder() {}
 
@@ -380,7 +383,7 @@ public:
         }
     };
 
-    KenLMPtr lm;
+    LMPtr lm;
     FlatTriePtr flatTrie;
     std::string lexiconPath;
     std::vector<std::string> wordList;
