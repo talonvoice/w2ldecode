@@ -425,8 +425,8 @@ enum {
 };
 
 struct LM {
-    LMPtr ken;
-    LMStatePtr kenStart;
+    LMPtr scorer;
+    LMStatePtr lmStart;
     FlatTriePtr trie;
     const w2l_dfa_node *dfa;
     int silToken;
@@ -444,8 +444,8 @@ struct State {
     const w2l_dfa_node *grammarLex = nullptr;
     // pos in trie, only set while decoding a lexicon word
     const FlatTrieNode *dictLex = nullptr;
-    // ken state, preserved even when dictLex goes nullptr
-    LMStatePtr kenState = nullptr;
+    // LM state, preserved even when dictLex goes nullptr
+    LMStatePtr lmState = nullptr;
     // whether the last edge in the grammar was a silToken.
     // could be optimized away
     bool wordEnd = false;
@@ -463,8 +463,8 @@ struct State {
         int operator()(const State *v1, const State *v2) const {
             return v1->grammarLex == v2->grammarLex
                 && v1->dictLex == v2->dictLex
-                && (v1->kenState == v2->kenState
-                    || (v1->kenState && v2->kenState && v1->kenState == v2->kenState));
+                && (v1->lmState == v2->lmState
+                    || (v1->lmState && v2->lmState && v1->lmState == v2->lmState));
         }
     };
 
@@ -480,12 +480,10 @@ struct State {
                 State it;
                 it.grammarLex = grammarLex;
                 it.dictLex = nullptr;
-                if (lm.ken) {
-                    auto kenAndScore = lm.ken->score(kenState, label);
-                    it.kenState = std::move(kenAndScore.first);
-                    score = kenAndScore.second;
+                if (lm.scorer) {
+                    std::tie(it.lmState, score) = lm.scorer->score(lmState, label);
                 } else {
-                    it.kenState = nullptr;
+                    it.lmState = nullptr;
                     score = dictLex->score(i);
                 }
                 fn(std::move(it), label, score);
@@ -519,7 +517,7 @@ struct State {
             for (int i = 0; i < n; ++i) {
                 auto nlex = dictLex->child(i);
                 if (indices.find(nlex->idx) != indices.end()) {
-                    fn(State{grammarLex, nlex, kenState}, nlex->idx, nlex->nChildren > 0);
+                    fn(State{grammarLex, nlex, lmState}, nlex->idx, nlex->nChildren > 0);
                 }
             }
             return true;
@@ -537,15 +535,15 @@ struct State {
 
                 // For dictionary edges start exploring the trie
                 if (edge.token == TOKEN_LMWORD || edge.token == TOKEN_LMWORD_CTX) {
-                    auto nextKenState = edge.token == TOKEN_LMWORD_CTX ? kenState : nullptr;
-                    if (!nextKenState)
-                        nextKenState = lm.kenStart;
+                    auto nextState = edge.token == TOKEN_LMWORD_CTX ? lmState : nullptr;
+                    if (!nextState)
+                        nextState = lm.lmStart;
                     auto dictRoot = lm.trie->getRoot();
                     const auto n = dictRoot->nChildren;
                     for (int i = 0; i < n; ++i) {
                         auto nDictLex = dictRoot->child(i);
                         if (indices.find(nDictLex->idx) != indices.end()) {
-                            fn(State{nlex, nDictLex, nextKenState}, nDictLex->idx, nDictLex->nChildren > 0);
+                            fn(State{nlex, nDictLex, nextState}, nDictLex->idx, nDictLex->nChildren > 0);
                         }
                     }
                 } else if (edge.token == TOKEN_SKIP) {
