@@ -66,7 +66,8 @@ typedef struct w2l_decoder w2l_decoder;
 #pragma pack(1)
 typedef struct {
     uint16_t token;
-    int32_t offset;
+    int32_t dst_offset;
+    int32_t call_offset;
 } w2l_dfa_edge;
 
 typedef struct {

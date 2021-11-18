@@ -410,6 +410,7 @@ enum {
     TOKEN_LMWORD      = 0xffff,
     TOKEN_LMWORD_CTX  = 0xfffe,
     TOKEN_SKIP        = 0xfffd,
+    TOKEN_CALL        = 0xfffc,
 };
 
 struct LM {
@@ -430,6 +431,8 @@ struct LM {
 struct State {
     // pos in the grammar, never null
     const w2l_dfa_node *grammarLex = nullptr;
+    // DFA call stack
+    std::vector<const w2l_dfa_node *> grammarStack;
     // pos in trie, only set while decoding a lexicon word
     const FlatTrieNode *dictLex = nullptr;
     // LM state, preserved even when dictLex goes nullptr
@@ -508,7 +511,7 @@ struct State {
             for (int i = 0; i < n; ++i) {
                 auto nlex = dictLex->child(i);
                 if (indices.find(nlex->idx) != indices.end()) {
-                    fn(State{grammarLex, nlex, lmState}, nlex->idx, nlex->nChildren > 0);
+                    fn(State{grammarLex, grammarStack, nlex, lmState}, nlex->idx, nlex->nChildren > 0);
                 }
             }
             return true;
@@ -520,12 +523,23 @@ struct State {
             auto dfaLex = queue.back();
             queue.pop_back();
 
+            // If this is a terminal state, consider a return edge
+            if (!grammarStack.empty() && (grammarLex->flags & FLAG_TERM)) {
+                auto stack = grammarStack;
+                auto nlex = stack.back();
+                stack.pop_back();
+                auto state = State{nlex, std::move(stack), nullptr, nullptr};
+                state.forChildren(frame, indices, lm, fn);
+            }
+
             for (int i = 0; i < dfaLex->nEdges; ++i) {
                 const auto &edge = dfaLex->edges[i];
-                auto nlex = lm.get(dfaLex, edge.offset);
+                auto nlex = lm.get(dfaLex, edge.dst_offset);
 
-                // For dictionary edges start exploring the trie
-                if (edge.token == TOKEN_LMWORD || edge.token == TOKEN_LMWORD_CTX) {
+                switch (edge.token) {
+                case TOKEN_LMWORD:
+                case TOKEN_LMWORD_CTX: {
+                    // For dictionary edges start exploring the trie
                     auto nextState = edge.token == TOKEN_LMWORD_CTX ? lmState : nullptr;
                     if (!nextState)
                         nextState = lm.lmStart;
@@ -534,14 +548,31 @@ struct State {
                     for (int i = 0; i < n; ++i) {
                         auto nDictLex = dictRoot->child(i);
                         if (indices.find(nDictLex->idx) != indices.end()) {
-                            fn(State{nlex, nDictLex, nextState}, nDictLex->idx, nDictLex->nChildren > 0);
+                            fn(State{nlex, grammarStack, nDictLex, nextState}, nDictLex->idx, nDictLex->nChildren > 0);
                         }
                     }
-                } else if (edge.token == TOKEN_SKIP) {
+                    break;
+                }
+
+                case TOKEN_SKIP:
                     // std::cout << "skip token, queueing up a new node with " << nlex->nEdges << " edges\n";
                     queue.push_back(nlex);
-                } else if (indices.find(edge.token) != indices.end()) {
-                    fn(State{nlex, nullptr, nullptr, edge.token == lm.silToken}, edge.token, true);
+                    break;
+
+                case TOKEN_CALL: {
+                    auto callLex = lm.get(dfaLex, edge.call_offset);
+                    auto stack = grammarStack;
+                    stack.push_back(nlex);
+                    auto state = State{callLex, stack, nullptr, nullptr};
+                    state.forChildren(frame, indices, lm, fn);
+                    break;
+                }
+
+                default:
+                    if (indices.find(edge.token) != indices.end()) {
+                        fn(State{nlex, grammarStack, nullptr, nullptr, edge.token == lm.silToken}, edge.token, true);
+                    }
+                    break;
                 }
             }
         }
