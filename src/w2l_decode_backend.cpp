@@ -315,8 +315,16 @@ public:
     }
 
     char *decode(w2l_emission *emission) {
-        const char *dfa = "\x01\x01\x00\xfe\xff\x00\x00\x00\x00";
-        return decodeDFA(emission, (w2l_dfa_node *)dfa, sizeof(dfa));
+        uint8_t buf[4 + 4 + sizeof(w2l_dfa_node) + sizeof(w2l_dfa_edge)];
+        uint32_t *header = (uint32_t *)&buf[0];
+        header[0] = 1;
+        header[1] = 8;
+        w2l_dfa_node *node = (w2l_dfa_node *)&buf[8];
+        node->flags  = 1; // FLAG_TERM
+        node->nEdges = 1;
+        node->edges[0].token  = 0xfffe; // TOKEN_LMWORD_CTX
+        node->edges[0].offset = 0;
+        return decodeDFA(emission, buf, sizeof(buf));
     }
 
     void decodeGreedy(w2l_emission *emission, int *path) {
@@ -335,8 +343,8 @@ public:
         }
     }
 
-    char *decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
-    w2l_decoder_result *decodeDFAPaths(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+    char *decodeDFA(w2l_emission *emission, const uint8_t *dfa, size_t dfa_size);
+    w2l_decoder_result *decodeDFAPaths(w2l_emission *emission, const uint8_t *dfa, size_t dfa_size);
     w2l_decoder_result *viterbiResult(const std::string &text, double viterbiScore);
 
     std::string tokensToString(const std::vector<int> &tokens, int from, int to) {
@@ -410,19 +418,29 @@ enum {
     TOKEN_LMWORD      = 0xffff,
     TOKEN_LMWORD_CTX  = 0xfffe,
     TOKEN_SKIP        = 0xfffd,
-    TOKEN_CALL        = 0xfffc,
 };
 
 struct LM {
     LMPtr scorer;
     LMStatePtr lmStart;
     FlatTriePtr trie;
-    const w2l_dfa_node *dfa;
+    const uint8_t *dfa;
+    size_t dfa_size;
     int silToken;
     int firstCommandLabel = 0;
 
-    const w2l_dfa_node *get(const w2l_dfa_node *base, const int32_t idx) const {
+    const w2l_dfa_node *rule(const uint32_t idx) const {
+        const uint32_t *header = reinterpret_cast<const uint32_t *>(dfa);
+        uint32_t offset = header[1 + idx];
+        return reinterpret_cast<const w2l_dfa_node *>(dfa + offset);
+    }
+
+    const w2l_dfa_node *node(const w2l_dfa_node *base, const int32_t idx) const {
         return reinterpret_cast<const w2l_dfa_node *>(reinterpret_cast<const uint8_t *>(base) + idx);
+    }
+
+    size_t pos(const w2l_dfa_node *dfa) const {
+        return (uintptr_t)dfa - (uintptr_t)this->dfa;
     }
 
     float commandScore = 1.5;
@@ -534,7 +552,7 @@ struct State {
 
             for (int i = 0; i < dfaLex->nEdges; ++i) {
                 const auto &edge = dfaLex->edges[i];
-                auto nlex = lm.get(dfaLex, edge.dst_offset);
+                auto nlex = lm.node(dfaLex, edge.offset);
 
                 switch (edge.token) {
                 case TOKEN_LMWORD:
@@ -559,17 +577,18 @@ struct State {
                     queue.push_back(nlex);
                     break;
 
-                case TOKEN_CALL: {
-                    auto callLex = lm.get(dfaLex, edge.call_offset);
-                    auto stack = grammarStack;
-                    stack.push_back(nlex);
-                    auto state = State{callLex, stack, nullptr, nullptr};
-                    state.forChildren(frame, indices, lm, fn);
-                    break;
-                }
-
                 default:
-                    if (indices.find(edge.token) != indices.end()) {
+                    // std::cout << "following from " << lm.pos(dfaLex) << " vi token " << edge.token << " to " << lm.pos(nlex) << "\n";
+                    if (edge.token >= W2L_RULE_OFFSET) {
+                        uint32_t rule = edge.token - W2L_RULE_OFFSET;
+                        // std::cout << "calling rule " << rule << "\n";
+                        auto callLex = lm.rule(rule);
+                        auto stack = grammarStack;
+                        stack.push_back(nlex);
+                        auto state = State{callLex, stack, nullptr, nullptr};
+                        state.forChildren(frame, indices, lm, fn);
+
+                    } else if (indices.find(edge.token) != indices.end()) {
                         fn(State{nlex, grammarStack, nullptr, nullptr, edge.token == lm.silToken}, edge.token, true);
                     }
                     break;
@@ -663,7 +682,7 @@ struct ViterbiDifferenceRejecter {
     }
 };
 
-char *PublicDecoder::decodeDFA(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
+char *PublicDecoder::decodeDFA(w2l_emission *emission, const uint8_t *dfa, size_t dfa_size) {
     w2l_decoder_result *result = decodeDFAPaths(emission, dfa, dfa_size);
     if (!result || result->n_paths < 1) {
         return nullptr;
@@ -697,7 +716,7 @@ w2l_decoder_result *PublicDecoder::viterbiResult(const std::string &text, double
     return result;
 }
 
-w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
+w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, const uint8_t *dfa, size_t dfa_size) {
     std::vector<int> viterbiToks(emission->n_frames);
     decodeGreedy(emission, &viterbiToks[0]);
 
@@ -719,7 +738,7 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
     }
 
     LMStatePtr start = lm ? lm->start(0) : nullptr;
-    auto dfalm = DFALM::LM{lm, start, flatTrie, dfa, silIdx};
+    auto dfalm = DFALM::LM{lm, start, flatTrie, dfa, dfa_size, silIdx};
     dfalm.commandScore = opts.command_score;
     dfalm.firstCommandLabel = wordList.size();
 
@@ -762,7 +781,7 @@ w2l_decoder_result *PublicDecoder::decodeDFAPaths(w2l_emission *emission, w2l_df
     rejecter.viterbiToks = viterbiToks;
 
     DFALM::State commandState;
-    commandState.grammarLex = dfalm.dfa;
+    commandState.grammarLex = dfalm.rule(0);
 
     // in the future we could stop the decode after one word instead of
     // decoding everything

@@ -66,8 +66,7 @@ typedef struct w2l_decoder w2l_decoder;
 #pragma pack(1)
 typedef struct {
     uint16_t token;
-    int32_t dst_offset;
-    int32_t call_offset;
+    int32_t offset;
 } w2l_dfa_edge;
 
 typedef struct {
@@ -116,6 +115,8 @@ struct w2l_decoder_result {
     struct w2l_decoder_path *paths[1];
 };
 
+#define W2L_RULE_OFFSET 10000
+
 /** Decode emisssions according to dfa model, return decoded text.
  *
  * If the decode fails or no good paths exist the result will be NULL.
@@ -124,10 +125,10 @@ struct w2l_decoder_result {
  * The dfa argument points to the first w2l_dfa_node. It is expected that
  * its address and edge offsets can be used to traverse the full dfa.
  */
-char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size);
 
 // the result of this function is created with a single malloc() so it is safe to free()
-struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size);
+struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size);
 
 // decode with LM only
 char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission);

@@ -52,11 +52,11 @@ void w2l_decoder_free(w2l_decoder *decoder) {
         delete reinterpret_cast<PublicDecoder *>(decoder);
 }
 
-char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
+char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
     return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFA(emission, dfa, dfa_size);
 }
 
-struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, w2l_dfa_node *dfa, size_t dfa_size) {
+struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
     return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFAPaths(emission, dfa, dfa_size);
 }
 
