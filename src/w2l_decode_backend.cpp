@@ -510,6 +510,14 @@ struct State {
     // Call finish() on the lm, like for end-of-sentence scoring
     std::pair<State, float> finish(const LM &lm) const {
         bool bad = dictLex || !(grammarLex->flags & FLAG_TERM);
+        if (!bad && !grammarStack.empty()) {
+            for (auto dfaLex : grammarStack) {
+                if (! (dfaLex->flags & FLAG_TERM)) {
+                    bad = true;
+                    break;
+                }
+            }
+        }
         return {*this, bad ? -1000000 : 0};
     }
 
