@@ -409,8 +409,9 @@ namespace DFALM {
 
 // flags on dfa nodes
 enum {
-    FLAG_NONE    = 0,
-    FLAG_TERM    = 1,
+    FLAG_NONE = 0,
+    FLAG_TERM = 1,
+    FLAG_SKIP = 2,
 };
 
 // special token values on dfa edges
