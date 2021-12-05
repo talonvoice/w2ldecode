@@ -448,6 +448,8 @@ struct LM {
 };
 
 struct State {
+    // NOTE: if you add fields, make sure to update the Equality operator
+
     // pos in the grammar, never null
     const w2l_dfa_node *grammarLex = nullptr;
     // DFA call stack
@@ -473,6 +475,7 @@ struct State {
         int operator()(const State *v1, const State *v2) const {
             return v1->grammarLex == v2->grammarLex
                 && v1->dictLex == v2->dictLex
+                && v1->grammarStack == v2->grammarStack
                 && (v1->lmState == v2->lmState
                     || (v1->lmState && v2->lmState && v1->lmState == v2->lmState));
         }
