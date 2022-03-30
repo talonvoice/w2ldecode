@@ -25,6 +25,7 @@ using namespace w2l;
 
 #include "w2l_decode.h"
 #include "decode_core.cpp"
+#include "unicode_stream.h"
 
 struct WordInfo {
     std::string word;
@@ -111,9 +112,12 @@ std::vector<std::string> loadWordList(const char *path) {
     result.reserve(1000000);
     result.push_back("<unk>");
 
-    std::ifstream infile(path);
+    auto ustream = unicode_ifstream(path);
+    if (!ustream.is_open) {
+        return {};
+    }
     std::string line;
-    while (std::getline(infile, line)) {
+    while (std::getline(ustream.stream, line)) {
         auto sep = std::min(line.find("\t"), line.find(" "));
         auto word = line.substr(0, sep);
         // handle duplicate words
@@ -192,10 +196,11 @@ public:
     // 80: data...
     bool loadTrie(const char *triePath) {
         // Load the trie
-        std::ifstream f(triePath, std::ios::binary | std::ios::in);
-        if (!f) {
+        auto ustream = unicode_ifstream(triePath, std::ios::binary | std::ios::in);
+        if (!ustream.is_open) {
             return false;
         }
+        auto &f = ustream.stream;
         char     magic[4];
         char     srcHash[32];
         char     trieHash[32];
@@ -273,9 +278,10 @@ public:
         trie.smear(smear_mode);
 
         auto flatTrie = toFlatTrie(trie.getRoot(), wordScores);
-        std::ofstream out(triePath, std::ios::out | std::ios::trunc | std::ios::binary);
-        if (!out.is_open())
+        auto ustream = unicode_ofstream(triePath, std::ios::out | std::ios::trunc | std::ios::binary);
+        if (!ustream.is_open)
             return false;
+        auto &out = ustream.stream;
 
         // header is described above the loadTrie() method
         const char *magic = "FLAT";
@@ -290,7 +296,6 @@ public:
         out.write(          zeroHash, sizeof(zeroHash));
         out.write((char *) &byteSize, sizeof(byteSize));
         out.write((char *) (flatTrie.storage.data()), byteSize);
-        out.close();
         return out.good();
     }
 

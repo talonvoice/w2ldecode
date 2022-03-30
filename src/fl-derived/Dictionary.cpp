@@ -13,6 +13,7 @@
 #include <stdexcept>
 
 #include "LibraryUtils.h"
+#include "../unicode_stream.h"
 
 namespace w2l {
 
@@ -21,12 +22,12 @@ Dictionary::Dictionary(std::istream& stream) {
 }
 
 Dictionary::Dictionary(const std::string& filename) {
-  if (!fileExists(filename)) {
+  auto ustream = unicode_ifstream(filename);
+  if (!ustream.is_open) {
     throw std::invalid_argument(
         "Dictionary file '" + filename + "' does not exist.");
   }
-  std::ifstream stream(filename);
-  createFromStream(stream);
+  createFromStream(ustream.stream);
 }
 
 void Dictionary::createFromStream(std::istream& stream) {

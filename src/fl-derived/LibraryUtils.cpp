@@ -10,7 +10,6 @@
 
 #include <array>
 #include <cstdlib>
-#include <fstream>
 #include <functional>
 
 static constexpr const char* kSpaceChars = "\t\n\v\f\r ";
@@ -115,11 +114,6 @@ std::string pathsConcat(const std::string& p1, const std::string& p2) {
   } else {
     return (trim(p1) + trim(p2));
   }
-}
-
-bool fileExists(const std::string& path) {
-  std::ifstream fs(path, std::ifstream::in);
-  return fs.good();
 }
 
 } // namespace w2l

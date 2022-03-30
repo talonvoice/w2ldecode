@@ -1,5 +1,6 @@
 cmake_minimum_required(VERSION 3.15)
 project(libw2ldecode)
+set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13")
 
 option(USE_KENLM "Build with kenlm" ON)
 option(MSVC_STATIC "Statically link MSVC runtimes" OFF)

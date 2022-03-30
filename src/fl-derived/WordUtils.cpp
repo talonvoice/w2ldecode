@@ -12,6 +12,7 @@
 
 #include "Defines.h"
 #include "LibraryUtils.h"
+#include "../unicode_stream.h"
 
 namespace w2l {
 
@@ -28,15 +29,14 @@ LexiconMap loadWords(const std::string& filename, int maxWords) {
   LexiconMap lexicon;
 
   std::string line;
-  std::ifstream infile(filename);
-
-  if (!infile) {
+  auto ustream = unicode_ifstream(filename);
+  if (!ustream.is_open) {
     throw std::invalid_argument("Cannot open " + filename);
   }
 
   // Add at most `maxWords` words into the lexicon.
   // If `maxWords` is negative then no limit is applied.
-  while (maxWords != lexicon.size() && std::getline(infile, line)) {
+  while (maxWords != lexicon.size() && std::getline(ustream.stream, line)) {
     // Parse the line into two strings: word and spelling.
     auto fields = splitOnWhitespace(line, true);
     if (fields.size() < 2) {
