@@ -31,15 +31,13 @@ static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmod
 #ifdef __MINGW32__
     // MINGW32
     int flags = 0;
-    if (mode & std::ios::out) {
-        flags |= _O_WRONLY | _O_CREAT;
-    }
-    if (mode & std::ios::in) {
-        flags |= _O_RDONLY;
-    }
-    if (mode & std::ios::binary) {
-        flags |= _O_BINARY;
-    }
+    bool out = (mode & (std::ios::out));
+    bool in  = (mode & (std::ios::in));
+    if (in && out) flags |= _O_RDWR | _O_CREAT;
+    else if  (out) flags |= _O_WRONLY | _O_CREAT;
+    else if   (in) flags |= _O_RDONLY;
+    if (mode & std::ios::binary) flags |= _O_BINARY;
+    if (mode & std::ios::trunc)  flags |= _O_TRUNC;
     std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
     std::u16string tmp = convert.from_bytes(path);
     std::wstring wpath(tmp.begin(), tmp.end());
