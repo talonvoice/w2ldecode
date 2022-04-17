@@ -45,7 +45,7 @@ static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmod
     std::wstring wpath(tmp.begin(), tmp.end());
 
     int fd = _wopen(wpath.c_str(), flags);
-    __gnu_cxx::stdio_filebuf<char> *buffer = new __gnu_cxx::stdio_filebuf<char>(fd, mode, 1);
+    __gnu_cxx::stdio_filebuf<char> *buffer = new __gnu_cxx::stdio_filebuf<char>(fd, mode, 8192);
     return UnicodeStream<T>{
         std::unique_ptr<__gnu_cxx::stdio_filebuf<char>>(buffer),
         T(buffer),
