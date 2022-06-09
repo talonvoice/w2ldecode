@@ -28,6 +28,9 @@ struct UnicodeStream {
 template <typename T>
 static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmode mode) {
 #ifdef WIN32
+    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
+    std::u16string tmp = convert.from_bytes(path);
+    std::wstring wpath(tmp.begin(), tmp.end());
 #ifdef __MINGW32__
     // MINGW32
     int flags = 0;
@@ -38,9 +41,6 @@ static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmod
     else if   (in) flags |= _O_RDONLY;
     if (mode & std::ios::binary) flags |= _O_BINARY;
     if (mode & std::ios::trunc)  flags |= _O_TRUNC;
-    std::wstring_convert<std::codecvt_utf8_utf16<char16_t>, char16_t> convert;
-    std::u16string tmp = convert.from_bytes(path);
-    std::wstring wpath(tmp.begin(), tmp.end());
 
     int fd = _wopen(wpath.c_str(), flags);
     __gnu_cxx::stdio_filebuf<char> *buffer = new __gnu_cxx::stdio_filebuf<char>(fd, mode, 8192);
@@ -51,7 +51,7 @@ static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmod
     };
 #else  // __MINGW32__
     // MSVC
-    auto stream = T(path.widen());
+    auto stream = T(wpath);
     bool is_open = stream.is_open();
     return UnicodeStream<T>{std::move(stream), is_open};
 #endif // __MINGW32__
