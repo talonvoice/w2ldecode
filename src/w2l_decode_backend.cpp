@@ -195,8 +195,10 @@ public:
     // 72: 8-byte data size
     // 80: data...
     bool loadTrie(const char *triePath) {
+        std::cout << "Decoder::loadTrie(" << this << ", " << triePath << ")" << std::endl;
         // Load the trie
         auto ustream = unicode_ifstream(triePath, std::ios::binary | std::ios::in);
+        std::cout << "stream is open? " << ustream.is_open << std::endl;
         if (!ustream.is_open) {
             return false;
         }
@@ -221,12 +223,16 @@ public:
         if ((byteSize % 4) != 0) {
             return false;
         }
+        std::cout << "read trie header. byteSize = " << byteSize << std::endl;
         flatTrie = std::make_shared<FlatTrie>();
         flatTrie->storage.resize(byteSize / 4);
+        std::cout << "reading data, buffer = " << flatTrie->storage.data() << std::endl;
         f.read(reinterpret_cast<char *>(flatTrie->storage.data()), byteSize);
+        std::cout << "finished reading data" << std::endl;
 
         // the root maxScore should be 0 during search and it's more convenient to set here
         const_cast<FlatTrieNode *>(flatTrie->getRoot())->maxScore = 0;
+        std::cout << "returning" << std::endl;
         return f.good();
     }
 
