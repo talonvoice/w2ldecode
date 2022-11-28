@@ -209,18 +209,30 @@ public:
         uint32_t version  = 0;
         size_t   byteSize = 0;
 
+        std::cout << "magic     @ " << f.tellg() << std::endl;
         f.read(         magic,    4);
+        std::cout << "read n=" << f.gcount() << std::endl;
+        std::cout << "version   @ " << f.tellg() << std::endl;
         f.read((char *)&version,  sizeof(version));
+        std::cout << "read n=" << f.gcount() << std::endl;
+        std::cout << "src hash  @ " << f.tellg() << std::endl;
         f.read(         srcHash,  sizeof(srcHash));
+        std::cout << "read n=" << f.gcount() << std::endl;
+        std::cout << "dst hash  @ " << f.tellg() << std::endl;
         f.read(         trieHash, sizeof(trieHash));
+        std::cout << "read n=" << f.gcount() << std::endl;
+        std::cout << "byte size @ " << f.tellg() << std::endl;
         f.read((char *)&byteSize, sizeof(byteSize));
+        std::cout << "read n=" << f.gcount() << std::endl;
+        std::cout << "byte size = " << byteSize << std::endl;
+        std::cout << "final     @ " << f.tellg() << std::endl;
         if (memcmp(magic, "FLAT", 4) != 0) {
             return false;
         }
         if (version != 3) {
             return false;
         }
-        if ((byteSize % 4) != 0) {
+        if (byteSize == 0 || (byteSize % 4) != 0) {
             return false;
         }
         std::cout << "read trie header. byteSize = " << byteSize << std::endl;
