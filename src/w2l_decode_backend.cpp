@@ -218,7 +218,7 @@ public:
         if (version != 3) {
             return false;
         }
-        if ((byteSize % 4) != 0) {
+        if (byteSize == 0 || (byteSize % 4) != 0) {
             return false;
         }
         flatTrie = std::make_shared<FlatTrie>();
