@@ -51,13 +51,13 @@ static UnicodeStream<T> unicode_fstream(std::string path, std::ios_base::openmod
     };
 #else  // __MINGW32__
     // MSVC
-    auto stream = T(wpath);
+    auto stream = T(wpath, mode);
     bool is_open = stream.is_open();
     return UnicodeStream<T>{std::move(stream), is_open};
 #endif // __MINGW32__
 #else  // WIN32
     // not windows
-    auto stream = T(path);
+    auto stream = T(path, mode);
     bool is_open = stream.is_open();
     return UnicodeStream<T>{std::move(stream), is_open};
 #endif // WIN32
