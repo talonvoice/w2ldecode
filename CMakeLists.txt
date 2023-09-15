@@ -38,5 +38,9 @@ endif()
 add_library(w2ldecode        SHARED ${OBJECTS})
 add_library(w2ldecode-static STATIC ${OBJECTS})
 
+if (NOT APPLE AND NOT MSVC)
+    target_link_libraries(w2ldecode -static-libgcc -static-libstdc++)
+endif()
+
 install(FILES src/w2l_common.h src/w2l_decode.h DESTINATION include)
 install(TARGETS w2ldecode w2ldecode-static DESTINATION lib)
