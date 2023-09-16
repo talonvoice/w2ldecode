@@ -1,6 +1,12 @@
 #include "w2l_decode.h"
 #include "w2l_decode_backend.cpp"
 
+#ifdef _WIN32
+#define DLLEXPORT __declspec(dllexport)
+#else
+#define DLLEXPORT
+#endif
+
 using namespace w2l;
 
 extern "C" {
@@ -27,40 +33,40 @@ w2l_decode_options w2l_decode_defaults {
     false, // debug
 };
 
-w2l_decoder *w2l_decoder_new(const char *tokens, const char *kenlm_model_path, const char *lexicon_path, const w2l_decode_options *opts) {
+DLLEXPORT w2l_decoder *w2l_decoder_new(const char *tokens, const char *kenlm_model_path, const char *lexicon_path, const w2l_decode_options *opts) {
     // TODO: what other config? beam size? smearing? lm weight?
     auto decoder = new PublicDecoder(tokens, kenlm_model_path, lexicon_path, opts);
     return reinterpret_cast<w2l_decoder *>(decoder);
 }
 
-bool w2l_decoder_load_trie(w2l_decoder *c_decoder, const char *trie_path) {
+DLLEXPORT bool w2l_decoder_load_trie(w2l_decoder *c_decoder, const char *trie_path) {
     auto decoder = reinterpret_cast<PublicDecoder *>(c_decoder);
     return decoder->loadTrie(trie_path);
 }
 
-bool w2l_decoder_make_trie(w2l_decoder *c_decoder, const char *trie_path) {
+DLLEXPORT bool w2l_decoder_make_trie(w2l_decoder *c_decoder, const char *trie_path) {
     auto decoder = reinterpret_cast<PublicDecoder *>(c_decoder);
     return decoder->makeTrie(trie_path);
 }
 
-char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission) {
+DLLEXPORT char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission) {
     return reinterpret_cast<PublicDecoder *>(decoder)->decode(emission);
 }
 
-void w2l_decoder_free(w2l_decoder *decoder) {
+DLLEXPORT void w2l_decoder_free(w2l_decoder *decoder) {
     if (decoder)
         delete reinterpret_cast<PublicDecoder *>(decoder);
 }
 
-char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
+DLLEXPORT char *w2l_decoder_dfa(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
     return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFA(emission, dfa, dfa_size);
 }
 
-struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
+DLLEXPORT struct w2l_decoder_result *w2l_decoder_dfa_paths(w2l_decoder *decoder, w2l_emission *emission, uint8_t *dfa, size_t dfa_size) {
     return reinterpret_cast<PublicDecoder *>(decoder)->decodeDFAPaths(emission, dfa, dfa_size);
 }
 
-char *w2l_decoder_greedy(w2l_decoder *c_decoder, w2l_emission *emission) {
+DLLEXPORT char *w2l_decoder_greedy(w2l_decoder *c_decoder, w2l_emission *emission) {
     auto decoder = reinterpret_cast<PublicDecoder *>(c_decoder);
     std::vector<int> path(emission->n_frames);
     decoder->decodeGreedy(emission, &path[0]);
