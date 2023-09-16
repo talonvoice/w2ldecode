@@ -77,4 +77,8 @@ DLLEXPORT char *w2l_decoder_greedy(w2l_decoder *c_decoder, w2l_emission *emissio
     return strdup(text.c_str());
 }
 
+DLLEXPORT void w2l_decoder_free_obj(void *addr) {
+    free(addr);
+}
+
 } // extern "C"

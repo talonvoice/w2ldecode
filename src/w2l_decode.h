@@ -136,6 +136,8 @@ char *w2l_decoder_decode(w2l_decoder *decoder, w2l_emission *emission);
 // greedy-decode an emission (e.g. viterbi or argmax)
 char *w2l_decoder_greedy(w2l_decoder *decoder, w2l_emission *emission);
 
+void w2l_decoder_free_obj(void *addr);
+
 #ifdef __cplusplus
 } // extern "C"
 #endif
