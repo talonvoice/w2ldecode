@@ -39,12 +39,8 @@ void Dictionary::createFromStream(std::istream& stream) {
     if (line.empty()) {
       continue;
     }
-    auto tkns = splitOnWhitespace(line, true);
     auto idx = idx2entry_.size();
-    // All entries on the same line map to the same index
-    for (const auto& tkn : tkns) {
-      addEntry(tkn, idx);
-    }
+    addEntry(line, idx);
   }
   if (!isContiguous()) {
     throw std::runtime_error("Invalid dictionary format - not contiguous");

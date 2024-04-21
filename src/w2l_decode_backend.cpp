@@ -154,7 +154,7 @@ public:
         }
         if (decoderOpt.criterionType == CriterionType::CTC &&
                 tokenDict.indexSize() > 0 &&
-                tokenDict.getEntry(tokenDict.indexSize() - 1) != kBlankToken) {
+                !tokenDict.contains(kBlankToken)) {
             tokenDict.addEntry(kBlankToken);
         }
 
